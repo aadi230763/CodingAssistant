@@ -37,9 +37,11 @@ export class AIService {
     return AIService.instance;
   }
 
+  private static thoughtCounter = 0;
+
   private addThought(message: string, type: AgentThought['type'] = 'info') {
     const thought: AgentThought = {
-      id: Date.now().toString(),
+      id: `ai-${Date.now()}-${++AIService.thoughtCounter}`,
       timestamp: Date.now(),
       message,
       type,

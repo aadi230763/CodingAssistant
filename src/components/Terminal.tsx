@@ -70,8 +70,8 @@ const Terminal: React.FC<TerminalProps> = ({ thoughts, title = 'Agent Thoughts' 
         {thoughts.length === 0 ? (
           <Text style={styles.emptyState}>$ Waiting for agent activity...</Text>
         ) : (
-          thoughts.map((thought) => (
-            <View key={thought.id} style={styles.thoughtLine}>
+          thoughts.map((thought, index) => (
+            <View key={`${thought.id}-${index}`} style={styles.thoughtLine}>
               <Text style={styles.timestamp}>
                 {formatTimestamp(thought.timestamp)}
               </Text>

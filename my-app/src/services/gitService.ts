@@ -24,9 +24,11 @@ export class GitService {
     return GitService.instance;
   }
 
+  private static thoughtCounter = 0;
+
   private addThought(message: string, type: AgentThought['type'] = 'info') {
     const thought: AgentThought = {
-      id: Date.now().toString(),
+      id: `git-${Date.now()}-${++GitService.thoughtCounter}`,
       timestamp: Date.now(),
       message,
       type,

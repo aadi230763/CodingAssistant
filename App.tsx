@@ -91,7 +91,7 @@ const App: React.FC = () => {
     GitService.onAnalysisComplete = (result: CodeAnalysisResult) => {
       setSecurityAnalysis(result);
       setThoughts(prevThoughts => [...prevThoughts, {
-        id: Date.now().toString(),
+        id: `app-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         timestamp: Date.now(),
         message: `Security analysis completed for repository: ${result.vulnerabilities.length} vulnerabilities found`,
         type: 'success',
