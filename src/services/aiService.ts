@@ -1,5 +1,6 @@
 import { RunAnywhere, SDKEnvironment } from '../mocks/runanywhere-core';
 import { LlamaCPP } from '../mocks/runanywhere-llamacpp';
+import { VoiceService } from './voiceService';
 import {
   SDKInitResult,
   ModelInfo,
@@ -8,11 +9,13 @@ import {
   ChatResponse,
   SDKStatus,
   AgentThought,
+  VoicePipelineStatus,
 } from '../types';
 
 export class AIService {
   private static instance: AIService;
   private isInitialized = false;
+  private voiceInitialized = false;
   private downloadProgress = new Map<string, ModelDownloadProgress>();
   private modelInfo: ModelInfo = {
     id: 'smollm2-360m',
@@ -285,6 +288,69 @@ export class AIService {
       modelsLoaded,
       currentModel: modelsLoaded.length > 0 ? this.modelInfo.id : undefined,
     };
+  }
+
+  // ── Voice Pipeline ──────────────────────────────────────────────
+
+  /**
+   * Initialize the on-device voice pipeline:
+   *   STT  → whisper-tiny-en
+   *   TTS  → piper-en_US-lessac-medium
+   *   VAD  → Voice Activity Detection
+   */
+  public async initializeVoicePipeline(): Promise<boolean> {
+    if (this.voiceInitialized) {
+      this.addThought('Voice pipeline already initialized', 'info');
+      return true;
+    }
+
+    try {
+      this.addThought('Starting voice pipeline initialization...', 'processing');
+      this.addThought('Loading whisper-tiny-en (STT) + piper-en_US-lessac-medium (TTS)', 'info');
+
+      const voiceService = VoiceService.getInstance();
+
+      // Forward voice thoughts to AI service thought stream
+      voiceService.onThoughtAdded = (thought: AgentThought) => {
+        if (this.onThoughtAdded) {
+          this.onThoughtAdded(thought);
+        }
+      };
+
+      const success = await voiceService.initialize();
+
+      if (success) {
+        this.voiceInitialized = true;
+        this.addThought('Voice pipeline integrated with AI service', 'success');
+
+        // Update SDK status with voice models
+        if (this.onStatusChange) {
+          const modelsLoaded = Array.from(this.downloadProgress.keys())
+            .filter(id => this.downloadProgress.get(id)?.status === 'completed');
+          modelsLoaded.push('whisper-tiny-en', 'piper-en_US-lessac-medium');
+
+          this.onStatusChange({
+            initialized: this.isInitialized,
+            modelsLoaded,
+            currentModel: this.modelInfo.id,
+          });
+        }
+      }
+
+      return success;
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      this.addThought(`Voice pipeline init failed: ${msg}`, 'error');
+      return false;
+    }
+  }
+
+  public isVoiceReady(): boolean {
+    return this.voiceInitialized;
+  }
+
+  public getVoicePipelineStatus(): VoicePipelineStatus {
+    return VoiceService.getInstance().getStatus();
   }
 }
 

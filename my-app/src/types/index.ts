@@ -119,3 +119,57 @@ export interface DependencyInfo {
   license?: string;
   size?: number;
 }
+
+// ─── Voice Pipeline Types ───────────────────────────────────────────
+
+export type VoiceListeningState = 'idle' | 'listening' | 'processing' | 'speaking' | 'error';
+
+export interface VoiceState {
+  isListening: boolean;
+  isSpeaking: boolean;
+  isProcessing: boolean;
+  state: VoiceListeningState;
+  vadActive: boolean;       // Voice Activity Detection active
+  error?: string;
+}
+
+export interface TranscriptResult {
+  text: string;
+  confidence: number;       // 0.0 - 1.0
+  isFinal: boolean;         // false = interim result, true = final
+  timestamp: number;
+  language?: string;
+}
+
+export interface VoiceCommand {
+  keyword: string;
+  intent: 'audit' | 'scan' | 'explain' | 'report' | 'stop' | 'help' | 'unknown';
+  parameters?: Record<string, string>;
+  rawTranscript: string;
+  confidence: number;
+}
+
+export interface TTSConfig {
+  modelId: string;
+  modelName: string;
+  voice: string;
+  speed: number;            // 0.5 - 2.0
+  pitch: number;            // 0.5 - 2.0
+}
+
+export interface STTConfig {
+  modelId: string;
+  modelName: string;
+  language: string;
+  vadEnabled: boolean;
+  vadSilenceMs: number;     // ms of silence before stopping
+  maxRecordingMs: number;   // max recording duration
+}
+
+export interface VoicePipelineStatus {
+  sttReady: boolean;
+  ttsReady: boolean;
+  vadReady: boolean;
+  sttModel?: string;
+  ttsModel?: string;
+}

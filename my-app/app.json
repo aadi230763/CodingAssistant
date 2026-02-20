@@ -13,7 +13,11 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "CodeJanitor needs microphone access for voice commands to audit, scan, and manage security pipelines hands-free.",
+        "NSSpeechRecognitionUsageDescription": "CodeJanitor uses speech recognition for on-device voice command processing."
+      }
     },
     "android": {
       "adaptiveIcon": {

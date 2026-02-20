@@ -13,10 +13,13 @@ import {
 
 import AIService from './src/services/aiService';
 import GitService from './src/services/gitService';
+import VoiceService from './src/services/voiceService';
 import StatusIndicator from './src/components/StatusIndicator';
 import ProgressBar from './src/components/ProgressBar';
 import Terminal from './src/components/Terminal';
 import SecurityAnalysisDisplay from './src/components/SecurityAnalysisDisplay';
+import MicButton from './src/components/MicButton';
+import LiveTranscript from './src/components/LiveTranscript';
 import {
   SDKStatus,
   ModelDownloadProgress,
@@ -26,6 +29,10 @@ import {
   GitCloneProgress,
   RepositoryInfo,
   CodeAnalysisResult,
+  VoiceState,
+  VoiceListeningState,
+  TranscriptResult,
+  VoiceCommand,
 } from './src/types';
 
 const SAMPLE_DEVSECOPS_LOG: DevSecOpsEvent = {
@@ -61,6 +68,13 @@ const App: React.FC = () => {
   const [currentRepository, setCurrentRepository] = useState<RepositoryInfo | null>(null);
   const [securityAnalysis, setSecurityAnalysis] = useState<CodeAnalysisResult | null>(null);
 
+  // Voice integration state
+  const [voiceState, setVoiceState] = useState<VoiceListeningState>('idle');
+  const [voiceReady, setVoiceReady] = useState(false);
+  const [currentTranscript, setCurrentTranscript] = useState<TranscriptResult | null>(null);
+  const [lastCommand, setLastCommand] = useState<string>('');
+  const [isVoiceInitializing, setIsVoiceInitializing] = useState(false);
+
   useEffect(() => {
     // Set up AI Service event handlers
     AIService.onStatusChange = setSdkStatus;
@@ -84,6 +98,21 @@ const App: React.FC = () => {
       }]);
     };
 
+    // Set up Voice Service event handlers
+    VoiceService.onStateChange = (state: VoiceState) => {
+      setVoiceState(state.state);
+    };
+    VoiceService.onTranscript = (result: TranscriptResult) => {
+      setCurrentTranscript(result);
+    };
+    VoiceService.onCommand = (command: VoiceCommand) => {
+      setLastCommand(`[${command.intent.toUpperCase()}] ${command.rawTranscript}`);
+      handleVoiceCommand(command);
+    };
+    VoiceService.onThoughtAdded = (thought: AgentThought) => {
+      setThoughts(prevThoughts => [...prevThoughts, thought]);
+    };
+
     // Auto-initialize on app start
     initializeSDK();
 
@@ -95,6 +124,10 @@ const App: React.FC = () => {
       GitService.onCloneProgress = undefined;
       GitService.onThoughtAdded = undefined;
       GitService.onAnalysisComplete = undefined;
+      VoiceService.onStateChange = undefined;
+      VoiceService.onTranscript = undefined;
+      VoiceService.onCommand = undefined;
+      VoiceService.onThoughtAdded = undefined;
     };
   }, []);
 
@@ -121,6 +154,80 @@ const App: React.FC = () => {
       setIsInitializing(false);
     }
   };
+
+  // ── Voice Pipeline ──────────────────────────────────────────────
+
+  const initializeVoice = async () => {
+    if (isVoiceInitializing || voiceReady) return;
+    setIsVoiceInitializing(true);
+
+    try {
+      const success = await AIService.initializeVoicePipeline();
+      setVoiceReady(success);
+      if (!success) {
+        Alert.alert('Voice Init Failed', 'Could not start the voice pipeline.');
+      }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      Alert.alert('Voice Error', msg);
+    } finally {
+      setIsVoiceInitializing(false);
+    }
+  };
+
+  const handleMicPress = async () => {
+    if (!voiceReady) {
+      // First press → initialize voice pipeline
+      await initializeVoice();
+      return;
+    }
+
+    if (voiceState === 'listening') {
+      await VoiceService.stopListening();
+    } else if (voiceState === 'speaking') {
+      await VoiceService.stopSpeaking();
+    } else {
+      setCurrentTranscript(null); // Clear previous transcript
+      await VoiceService.startListening();
+    }
+  };
+
+  const handleVoiceCommand = async (command: VoiceCommand) => {
+    switch (command.intent) {
+      case 'audit':
+      case 'scan':
+        handleVibeCheck();
+        break;
+      case 'explain':
+        if (analysisResult) {
+          await VoiceService.speakAnalysis(analysisResult);
+        } else {
+          await VoiceService.speakAnalysis('No analysis results available yet. Please run a security scan first.');
+        }
+        break;
+      case 'report':
+        if (securityAnalysis) {
+          const summary = `Security report: Found ${securityAnalysis.vulnerabilities.length} vulnerabilities. Risk level is ${securityAnalysis.summary.riskLevel}. Security score is ${securityAnalysis.summary.securityScore} out of 100.`;
+          await VoiceService.speakAnalysis(summary);
+        } else {
+          await VoiceService.speakAnalysis('No security report available. Clone a repository and run analysis first.');
+        }
+        break;
+      case 'stop':
+        await VoiceService.stopListening();
+        await VoiceService.stopSpeaking();
+        break;
+      case 'help':
+        await VoiceService.speakAnalysis(
+          'Available commands: say audit or scan to analyze security. Say explain to hear recent results. Say report for repository summary. Say stop to cancel.'
+        );
+        break;
+      default:
+        await VoiceService.speakAnalysis('Sorry, I did not understand that command. Say help for available commands.');
+        break;
+    }
+  };
+
 
   const handleVibeCheck = async () => {
     if (!AIService.isModelReady()) {
@@ -315,6 +422,54 @@ const App: React.FC = () => {
           <Text style={styles.logPreview}>
             Sample Log: {SAMPLE_DEVSECOPS_LOG.level} | {SAMPLE_DEVSECOPS_LOG.service} | {SAMPLE_DEVSECOPS_LOG.event}
           </Text>
+        </View>
+
+        {/* ── Voice Command Section ──────────────────────────── */}
+        <View style={styles.voiceSection}>
+          <Text style={styles.sectionTitle}>🎤 Voice Commands</Text>
+
+          <View style={styles.voiceStatusRow}>
+            <View style={[styles.voiceBadge, { backgroundColor: voiceReady ? '#003300' : '#1a1a1a' }]}>
+              <Text style={[styles.voiceBadgeText, { color: voiceReady ? '#00ff00' : '#666' }]}>
+                STT: {voiceReady ? 'whisper-tiny-en ✓' : 'not loaded'}
+              </Text>
+            </View>
+            <View style={[styles.voiceBadge, { backgroundColor: voiceReady ? '#002233' : '#1a1a1a' }]}>
+              <Text style={[styles.voiceBadgeText, { color: voiceReady ? '#00ccff' : '#666' }]}>
+                TTS: {voiceReady ? 'piper-lessac ✓' : 'not loaded'}
+              </Text>
+            </View>
+          </View>
+
+          <MicButton
+            state={voiceReady ? voiceState : 'idle'}
+            onPress={handleMicPress}
+            disabled={isVoiceInitializing}
+            size={72}
+          />
+
+          {isVoiceInitializing && (
+            <Text style={styles.voiceInitText}>Initializing voice pipeline...</Text>
+          )}
+          {!voiceReady && !isVoiceInitializing && (
+            <Text style={styles.voiceInitText}>Tap the mic to initialize voice commands</Text>
+          )}
+
+          <LiveTranscript
+            transcript={currentTranscript}
+            voiceState={voiceReady ? voiceState : 'idle'}
+            lastCommand={lastCommand}
+          />
+
+          {voiceReady && (
+            <View style={styles.voiceHints}>
+              <Text style={styles.voiceHintTitle}>Voice Commands:</Text>
+              <Text style={styles.voiceHintItem}>• "audit" / "scan" → Run security analysis</Text>
+              <Text style={styles.voiceHintItem}>• "explain" → Hear analysis results</Text>
+              <Text style={styles.voiceHintItem}>• "report" → Hear repo summary</Text>
+              <Text style={styles.voiceHintItem}>• "help" → List commands</Text>
+            </View>
+          )}
         </View>
 
         {/* Analysis Results */}
@@ -522,6 +677,58 @@ const styles = StyleSheet.create({
     fontFamily: 'Courier New',
     marginTop: 8,
     paddingHorizontal: 4,
+  },
+  // Voice Command Styles
+  voiceSection: {
+    marginBottom: 20,
+    backgroundColor: '#0a0a0a',
+    borderRadius: 10,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#1a3a1a',
+  },
+  voiceStatusRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  voiceBadge: {
+    flex: 1,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  voiceBadgeText: {
+    fontSize: 9,
+    fontFamily: 'Courier New',
+    fontWeight: '700',
+  },
+  voiceInitText: {
+    textAlign: 'center',
+    color: '#666',
+    fontSize: 10,
+    fontFamily: 'Courier New',
+    marginBottom: 8,
+  },
+  voiceHints: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#1a1a1a',
+  },
+  voiceHintTitle: {
+    fontSize: 10,
+    fontFamily: 'Courier New',
+    fontWeight: '700',
+    color: '#888',
+    marginBottom: 4,
+  },
+  voiceHintItem: {
+    fontSize: 10,
+    fontFamily: 'Courier New',
+    color: '#555',
+    lineHeight: 16,
   },
 });
 
