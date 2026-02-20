@@ -29,15 +29,26 @@ Phase 1 establishes the foundational architecture for CodeJanitor, an on-device 
 
 ### 🔒 Security Analysis
 - **"Vibe Check" Feature**: Analyzes sample DevSecOps logs for security threats
-- **Pattern Recognition**: Detects authentication failures, unauthorized access, and anomalies
+- **Repository Scanning**: Clone and analyze GitHub repositories for security vulnerabilities
+- **Pattern Recognition**: Detects authentication failures, unauthorized access, and anomalies  
+- **Vulnerability Detection**: Identifies SQL injection, hardcoded credentials, and dependency issues
 - **Severity Assessment**: Categorizes threats (LOW/MEDIUM/HIGH/CRITICAL)
 - **Actionable Insights**: Provides specific remediation recommendations
+- **CWE Mapping**: Maps vulnerabilities to Common Weakness Enumeration standards
 
 ### 🖥️ Agent Diagnostics
 - **Terminal Component**: Real-time agent thought process logging
 - **Color-Coded Messages**: Success (green), errors (red), warnings (orange), processing (blue)
 - **Timestamp Tracking**: Precise timing of all operations
 - **Scrollable History**: Complete audit trail of agent activities
+
+### 📁 Git Integration
+- **Repository Input**: Text field for GitHub repository URLs
+- **URL Validation**: Real-time validation of GitHub repository format
+- **Clone Progress**: Visual progress tracking during repository download
+- **Isomorphic Git**: Shallow cloning for efficient repository analysis
+- **Auto-Analysis**: Automatic security scanning upon successful clone
+- **Structured for Auth**: Architecture ready for GitHub Personal Access Tokens
 
 ## 🏗️ Technical Architecture
 
@@ -47,14 +58,16 @@ Phase 1 establishes the foundational architecture for CodeJanitor, an on-device 
 CodeJanitor/
 ├── src/
 │   ├── services/
-│   │   └── aiService.ts         # AI SDK integration layer
+│   │   ├── aiService.ts         # AI SDK integration layer
+│   │   └── gitService.ts        # GitHub repository cloning and analysis
 │   ├── mocks/
 │   │   ├── runanywhere-core.ts     # Mock RunAnywhere SDK
 │   │   └── runanywhere-llamacpp.ts # Mock LlamaCPP backend
 │   ├── components/
 │   │   ├── StatusIndicator.tsx     # SDK status display
 │   │   ├── ProgressBar.tsx         # Animated progress tracking
-│   │   └── Terminal.tsx            # Agent diagnostics terminal
+│   │   ├── Terminal.tsx            # Agent diagnostics terminal
+│   │   └── SecurityAnalysisDisplay.tsx # Repository security report
 │   └── types/
 │       └── index.ts                # TypeScript interfaces
 ├── my-app/                         # Expo project wrapper
@@ -74,6 +87,13 @@ CodeJanitor/
 - **Error Simulation**: Random failures for robust error handling testing
 - **Progress Simulation**: Authentic download progress with byte tracking
 
+**GitService Class (Singleton Pattern)**
+- **Repository Cloning**: GitHub repository cloning with isomorphic-git
+- **Progress Tracking**: Real-time clone progress with visual feedback
+- **Security Analysis**: Automatic vulnerability detection post-clone
+- **File System Integration**: React Native FS for local storage management
+- **Validation**: GitHub URL format validation and error handling
+
 ### State Management
 - **Event-Driven Updates**: Components subscribe to service events
 - **React Hooks**: useState and useEffect for local state management
@@ -87,6 +107,8 @@ CodeJanitor/
 | **Runtime** | Expo | Latest | Development and deployment |
 | **Language** | TypeScript | 5.0.4 | Type safety and reliability |
 | **AI Backend** | RunAnywhere SDK | Mock v1.0 | On-device AI processing |
+| **Git Integration** | isomorphic-git | 1.25.6 | Repository cloning and analysis |
+| **File System** | react-native-fs | 2.20.0 | Local file storage management |
 | **UI Library** | React Native Core | Built-in | Native components |
 | **State** | React Hooks | Built-in | Component state management |
 
@@ -103,6 +125,11 @@ CodeJanitor/
 - [x] TypeScript interfaces and type safety
 - [x] Error handling and user feedback
 - [x] Hot reloading development environment
+- [x] GitHub repository URL input validation
+- [x] Repository cloning with progress tracking
+- [x] Automatic security analysis post-clone
+- [x] Comprehensive vulnerability display
+- [x] Dependency analysis with vulnerability counts
 
 ### 🔄 Simulated Features (Ready for Real SDK)
 - [x] SDK initialization with environment configuration
@@ -151,8 +178,16 @@ npm start
    - Review security analysis of sample DevSecOps log
    - Watch agent thoughts in terminal
 
-## 📈 Demo Scenario
+4. **Test Repository Analysis** (NEW!)
+   - Enter any GitHub repository URL in the text input
+   - Tap "📁 Clone & Analyze" button
+   - Watch clone progress with real-time updates
+   - Review comprehensive security analysis report
+   - Explore vulnerability details and recommendations
 
+## 📈 Demo Scenarios
+
+### DevSecOps Log Analysis
 **Sample DevSecOps Log Analysis:**
 ```json
 {
@@ -170,14 +205,33 @@ npm start
 - **Recommendation**: Enable enhanced monitoring, review access patterns
 - **Confidence**: 95%
 
+### Repository Security Analysis
+**Sample GitHub Repository Scan:**
+```
+Repository: example-node-app
+URL: https://github.com/user/example-node-app
+Clone Status: ✅ Completed (2.1 MB)
+```
+
+**Security Report:**
+- **Vulnerabilities Found**: 3 (1 Critical, 1 High, 1 Medium)
+- **Security Score**: 35/100 (HIGH risk)
+- **Critical Issues**:
+  - SQL Injection vulnerability in index.js:8
+  - Hardcoded credentials in config.js:4
+  - Vulnerable lodash dependency (CWE-1321)
+- **Dependencies**: 6 analyzed, 3 with vulnerabilities
+- **Recommendations**: 5 actionable security improvements
+
 ## 🎯 Phase 1 Success Metrics
 
 | Metric | Target | Status |
 |--------|--------|--------|
-| UI Components | 5+ custom components | ✅ 6 implemented |
+| UI Components | 5+ custom components | ✅ 7 implemented |
 | SDK Integration | Mock → Real ready | ✅ Architecture complete |
+| Git Integration | Repository scanning | ✅ Implemented |
 | Mobile Deployment | iOS via Expo | ✅ Working |
-| Security Analysis | Demo functionality | ✅ Implemented |
+| Security Analysis | Demo functionality | ✅ Enhanced with Git repos |
 | Code Quality | TypeScript strict | ✅ 100% typed |
 | Documentation | Comprehensive | ✅ This document |
 

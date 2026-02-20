@@ -8,18 +8,24 @@ import {
   StyleSheet,
   StatusBar,
   Alert,
+  TextInput,
 } from 'react-native';
 
 import AIService from './src/services/aiService';
+import GitService from './src/services/gitService';
 import StatusIndicator from './src/components/StatusIndicator';
 import ProgressBar from './src/components/ProgressBar';
 import Terminal from './src/components/Terminal';
+import SecurityAnalysisDisplay from './src/components/SecurityAnalysisDisplay';
 import {
   SDKStatus,
   ModelDownloadProgress,
   AgentThought,
   ChatMessage,
   DevSecOpsEvent,
+  GitCloneProgress,
+  RepositoryInfo,
+  CodeAnalysisResult,
 } from './src/types';
 
 const SAMPLE_DEVSECOPS_LOG: DevSecOpsEvent = {
@@ -43,17 +49,39 @@ const App: React.FC = () => {
     modelsLoaded: [],
   });
   const [downloadProgress, setDownloadProgress] = useState<ModelDownloadProgress | null>(null);
+  const [gitCloneProgress, setGitCloneProgress] = useState<GitCloneProgress | null>(null);
   const [thoughts, setThoughts] = useState<AgentThought[]>([]);
   const [isInitializing, setIsInitializing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<string>('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  
+  // Git integration state
+  const [githubUrl, setGithubUrl] = useState<string>('');
+  const [isCloning, setIsCloning] = useState(false);
+  const [currentRepository, setCurrentRepository] = useState<RepositoryInfo | null>(null);
+  const [securityAnalysis, setSecurityAnalysis] = useState<CodeAnalysisResult | null>(null);
 
   useEffect(() => {
-    // Set up event handlers
+    // Set up AI Service event handlers
     AIService.onStatusChange = setSdkStatus;
     AIService.onProgressUpdate = setDownloadProgress;
     AIService.onThoughtAdded = (thought: AgentThought) => {
       setThoughts(prevThoughts => [...prevThoughts, thought]);
+    };
+
+    // Set up Git Service event handlers
+    GitService.onCloneProgress = setGitCloneProgress;
+    GitService.onThoughtAdded = (thought: AgentThought) => {
+      setThoughts(prevThoughts => [...prevThoughts, thought]);
+    };
+    GitService.onAnalysisComplete = (result: CodeAnalysisResult) => {
+      setSecurityAnalysis(result);
+      setThoughts(prevThoughts => [...prevThoughts, {
+        id: Date.now().toString(),
+        timestamp: Date.now(),
+        message: `Security analysis completed for repository: ${result.vulnerabilities.length} vulnerabilities found`,
+        type: 'success',
+      }]);
     };
 
     // Auto-initialize on app start
@@ -64,6 +92,9 @@ const App: React.FC = () => {
       AIService.onStatusChange = undefined;
       AIService.onProgressUpdate = undefined;
       AIService.onThoughtAdded = undefined;
+      GitService.onCloneProgress = undefined;
+      GitService.onThoughtAdded = undefined;
+      GitService.onAnalysisComplete = undefined;
     };
   }, []);
 
@@ -127,6 +158,38 @@ const App: React.FC = () => {
     }
   };
 
+  const handleCloneRepository = async () => {
+    if (!githubUrl.trim()) {
+      Alert.alert('Missing URL', 'Please enter a GitHub repository URL');
+      return;
+    }
+
+    if (GitService.isCloneInProgress()) {
+      Alert.alert('Clone in Progress', 'Another repository is currently being cloned. Please wait.');
+      return;
+    }
+
+    setIsCloning(true);
+    setSecurityAnalysis(null); // Clear previous analysis
+
+    try {
+      const repository = await GitService.cloneUserRepo(githubUrl.trim());
+      setCurrentRepository(repository);
+      setGithubUrl(''); // Clear input after successful clone
+      
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      Alert.alert('Clone Failed', errorMessage);
+    } finally {
+      setIsCloning(false);
+    }
+  };
+
+  const isValidGitHubUrl = (url: string): boolean => {
+    const githubPattern = /^https:\/\/github\.com\/[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+(?:\.git)?(?:\/)?$/;
+    return githubPattern.test(url);
+  };
+
   const isModelReady = downloadProgress?.status === 'completed';
   const showProgress = downloadProgress && downloadProgress.status === 'downloading';
 
@@ -159,6 +222,77 @@ const App: React.FC = () => {
               {Math.round(downloadProgress.downloadedBytes / 1024 / 1024)}MB / {Math.round(downloadProgress.totalBytes / 1024 / 1024)}MB
             </Text>
           </View>
+        )}
+
+        {/* Git Clone Progress Section */}
+        {gitCloneProgress && gitCloneProgress.phase !== 'completed' && (
+          <View style={styles.progressSection}>
+            <Text style={styles.sectionTitle}>📁 Repository Clone</Text>
+            <ProgressBar 
+              progress={gitCloneProgress.progress}
+              showPercentage={true}
+              color={gitCloneProgress.phase === 'error' ? '#ff0040' : '#00aaff'}
+            />
+            <Text style={styles.progressText}>
+              {gitCloneProgress.currentStep}
+            </Text>
+            {gitCloneProgress.error && (
+              <Text style={[styles.progressText, { color: '#ff0040' }]}>
+                Error: {gitCloneProgress.error}
+              </Text>
+            )}
+          </View>
+        )}
+
+        {/* Repository Analysis Section */}
+        <View style={styles.actionsSection}>
+          <Text style={styles.sectionTitle}>🔗 Repository Analysis</Text>
+          
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.urlInput}
+              value={githubUrl}
+              onChangeText={setGithubUrl}
+              placeholder="Enter GitHub repository URL..."
+              placeholderTextColor="#666666"
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="done"
+              onSubmitEditing={handleCloneRepository}
+            />
+            <TouchableOpacity
+              style={[
+                styles.cloneButton,
+                (!githubUrl.trim() || isCloning || !isValidGitHubUrl(githubUrl.trim())) && styles.buttonDisabled,
+              ]}
+              onPress={handleCloneRepository}
+              disabled={!githubUrl.trim() || isCloning || !isValidGitHubUrl(githubUrl.trim())}
+            >
+              <Text style={styles.buttonText}>
+                {isCloning ? '⟳ Cloning...' : '📁 Clone & Analyze'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {githubUrl.trim() && !isValidGitHubUrl(githubUrl.trim()) && (
+            <Text style={styles.validationError}>
+              Please enter a valid GitHub repository URL (e.g., https://github.com/user/repo)
+            </Text>
+          )}
+
+          {currentRepository && (
+            <Text style={styles.currentRepoText}>
+              📊 Current: {currentRepository.name} ({new Date(currentRepository.clonedAt).toLocaleTimeString()})
+            </Text>
+          )}
+        </View>
+
+        {/* Security Analysis Results */}
+        {securityAnalysis && (
+          <SecurityAnalysisDisplay
+            analysis={securityAnalysis}
+            onClose={() => setSecurityAnalysis(null)}
+          />
         )}
 
         {/* Actions Section */}
@@ -347,6 +481,47 @@ const styles = StyleSheet.create({
   terminalSection: {
     margin: 20,
     marginTop: 0,
+  },
+  // Git Repository Styles
+  inputContainer: {
+    marginBottom: 16,
+  },
+  urlInput: {
+    backgroundColor: '#1a1a1a',
+    borderWidth: 1,
+    borderColor: '#333333',
+    borderRadius: 6,
+    padding: 12,
+    color: '#ffffff',
+    fontSize: 12,
+    fontFamily: 'Courier New',
+    marginBottom: 12,
+    minHeight: 40,
+  },
+  cloneButton: {
+    backgroundColor: '#00aaff',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    elevation: 3,
+    shadowColor: '#00aaff',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  validationError: {
+    color: '#ff0040',
+    fontSize: 10,
+    fontFamily: 'Courier New',
+    marginTop: 4,
+    paddingLeft: 4,
+  },
+  currentRepoText: {
+    color: '#00ff00',
+    fontSize: 11,
+    fontFamily: 'Courier New',
+    marginTop: 8,
+    paddingHorizontal: 4,
   },
 });
 

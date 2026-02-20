@@ -66,3 +66,56 @@ export interface SecurityAnalysis {
   recommendation: string;
   confidence: number;
 }
+
+// Git Repository types
+export interface GitCloneProgress {
+  phase: 'initializing' | 'cloning' | 'analyzing' | 'completed' | 'error';
+  progress: number; // 0-100
+  currentStep: string;
+  totalSteps?: number;
+  error?: string;
+}
+
+export interface RepositoryInfo {
+  id: string;
+  url: string;
+  name: string;
+  localPath: string;
+  clonedAt: number;
+  lastAnalyzed?: number;
+  size?: number;
+}
+
+export interface CodeAnalysisResult {
+  repositoryId: string;
+  vulnerabilities: SecurityVulnerability[];
+  dependencies: DependencyInfo[];
+  summary: {
+    totalFiles: number;
+    linesOfCode: number;
+    securityScore: number;
+    riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  };
+  recommendations: string[];
+}
+
+export interface SecurityVulnerability {
+  id: string;
+  type: 'dependency' | 'code' | 'configuration';
+  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  title: string;
+  description: string;
+  file: string;
+  line?: number;
+  recommendation: string;
+  cwe?: string; // Common Weakness Enumeration
+}
+
+export interface DependencyInfo {
+  name: string;
+  version: string;
+  vulnerabilities: number;
+  outdated: boolean;
+  license?: string;
+  size?: number;
+}
